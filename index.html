@@ -1,0 +1,872 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="color-scheme" content="light dark" />
+    <link rel="icon" href="data:," />
+    <title>Alertas Comunitarias</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+      :root {
+        --bg: #f6f4ef;
+        --surface: #ffffff;
+        --surface-2: #efece4;
+        --ink: #1c1a16;
+        --ink-soft: #5c574d;
+        --line: #ddd6c8;
+        --accent: #b3271e;
+        --accent-ink: #ffffff;
+        --accent-soft: #fbeae8;
+        --ok: #1e7a3c;
+        --ok-soft: #e6f4ea;
+        --warn: #9a6a00;
+        --warn-soft: #fdf3d7;
+        --radius: 14px;
+        --shadow: 0 2px 10px rgba(28, 26, 22, 0.10);
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #171512;
+          --surface: #221f1b;
+          --surface-2: #2b2721;
+          --ink: #f2eee6;
+          --ink-soft: #b3ab9c;
+          --line: #3d382f;
+          --accent: #e05247;
+          --accent-ink: #ffffff;
+          --accent-soft: #3d2320;
+          --ok: #5cc97e;
+          --ok-soft: #1e3325;
+          --warn: #e8bc55;
+          --warn-soft: #3a3018;
+          --shadow: 0 2px 10px rgba(0, 0, 0, 0.45);
+        }
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; }
+      body {
+        background: var(--bg);
+        color: var(--ink);
+        font-family: "Segoe UI", system-ui, -apple-system, Roboto, "Helvetica Neue", Arial, sans-serif;
+        line-height: 1.5;
+        -webkit-text-size-adjust: 100%;
+      }
+      button, [role="button"], select, summary, input:not([type="checkbox"], [type="radio"]), textarea {
+        min-height: 2.25rem;
+        font: inherit;
+      }
+      .wrap { max-width: 720px; margin: 0 auto; padding: 0 14px 40px; }
+
+      /* ---------- Encabezado ---------- */
+      header.top { padding: 18px 2px 10px; }
+      header.top h1 { font-size: 1.55rem; margin: 0 0 4px; letter-spacing: -0.01em; }
+      header.top p { margin: 0; color: var(--ink-soft); font-size: 0.98rem; }
+      .anon {
+        display: inline-flex; align-items: center; gap: 6px;
+        margin-top: 10px; padding: 5px 10px;
+        background: var(--surface-2); border: 1px solid var(--line);
+        border-radius: 999px; font-size: 0.82rem; color: var(--ink-soft);
+      }
+      .anon svg { flex: none; }
+
+      /* ---------- Aviso de permiso ---------- */
+      .perm {
+        margin: 14px 0 0; padding: 14px 16px;
+        border-radius: var(--radius); border: 1px solid var(--line);
+        background: var(--surface); box-shadow: var(--shadow);
+      }
+      .perm h2 { font-size: 1rem; margin: 0 0 6px; display: flex; align-items: center; gap: 8px; }
+      .perm p { margin: 0 0 8px; font-size: 0.93rem; color: var(--ink-soft); }
+      .perm p:last-child { margin-bottom: 0; }
+      .perm.state-ok { border-color: var(--ok); background: var(--ok-soft); }
+      .perm.state-ok h2 { color: var(--ok); }
+      .perm.state-ok p { color: var(--ink); }
+      .perm.state-denied { border-color: var(--warn); background: var(--warn-soft); }
+      .perm details { margin-top: 8px; }
+      .perm summary { cursor: pointer; font-weight: 600; font-size: 0.93rem; padding: 6px 0; }
+      .perm ol { margin: 6px 0 10px; padding-left: 20px; font-size: 0.92rem; }
+      .perm ol li { margin-bottom: 4px; }
+      .perm .plat { font-weight: 700; font-size: 0.9rem; margin: 10px 0 2px; }
+      .btn-perm {
+        margin-top: 6px; border: 0; border-radius: 10px; cursor: pointer;
+        background: var(--accent); color: var(--accent-ink);
+        padding: 10px 16px; font-weight: 700; min-height: 44px;
+      }
+
+      /* ---------- Mapa ---------- */
+      #map {
+        height: 340px; margin-top: 14px;
+        border-radius: var(--radius); border: 1px solid var(--line);
+        box-shadow: var(--shadow); z-index: 0;
+        background: var(--surface-2);
+      }
+      .map-actions { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+      .btn-ghost {
+        flex: 1 1 auto; border: 1px solid var(--line); background: var(--surface);
+        color: var(--ink); border-radius: 10px; padding: 10px 12px;
+        font-weight: 600; cursor: pointer; min-height: 44px;
+        display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+      }
+      .btn-ghost:active { background: var(--surface-2); }
+
+      /* ---------- Botón reportar ---------- */
+      .btn-report {
+        width: 100%; margin-top: 14px; border: 0; cursor: pointer;
+        background: var(--accent); color: var(--accent-ink);
+        border-radius: var(--radius); padding: 16px;
+        font-size: 1.12rem; font-weight: 800; min-height: 56px;
+        box-shadow: var(--shadow);
+        display: flex; align-items: center; justify-content: center; gap: 10px;
+      }
+      .btn-report:active { filter: brightness(0.92); }
+
+      /* ---------- Formulario ---------- */
+      .panel {
+        margin-top: 14px; background: var(--surface); border: 1px solid var(--line);
+        border-radius: var(--radius); box-shadow: var(--shadow); padding: 16px;
+      }
+      .panel h2 { margin: 0 0 4px; font-size: 1.12rem; }
+      .panel .hint { color: var(--ink-soft); font-size: 0.9rem; margin: 0 0 12px; }
+      .field { margin-bottom: 14px; }
+      .field label, .field .flabel { display: block; font-weight: 700; font-size: 0.92rem; margin-bottom: 6px; }
+      .chips { display: flex; gap: 8px; flex-wrap: wrap; }
+      .chip {
+        border: 1.5px solid var(--line); background: var(--surface);
+        color: var(--ink); border-radius: 999px; padding: 9px 14px;
+        cursor: pointer; font-weight: 600; min-height: 44px;
+      }
+      .chip[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+      textarea, select {
+        width: 100%; border: 1.5px solid var(--line); border-radius: 10px;
+        background: var(--surface); color: var(--ink); padding: 10px 12px;
+      }
+      textarea { min-height: 64px; resize: vertical; }
+      .loc-box {
+        border: 1.5px dashed var(--line); border-radius: 10px; padding: 12px;
+        background: var(--surface-2);
+      }
+      .loc-box .loc-status { font-size: 0.92rem; margin: 0 0 10px; }
+      .loc-box .loc-status strong { color: var(--ok); }
+      .btn-loc {
+        width: 100%; border: 0; border-radius: 10px; cursor: pointer;
+        background: var(--ink); color: var(--bg);
+        padding: 12px; font-weight: 700; min-height: 48px;
+        display: flex; align-items: center; justify-content: center; gap: 8px;
+      }
+      .loc-alt { font-size: 0.86rem; color: var(--ink-soft); margin: 10px 0 0; }
+      .form-actions { display: flex; gap: 8px; margin-top: 4px; }
+      .btn-publish {
+        flex: 1; border: 0; border-radius: 10px; cursor: pointer;
+        background: var(--accent); color: var(--accent-ink);
+        padding: 13px; font-weight: 800; font-size: 1rem; min-height: 50px;
+      }
+      .btn-publish:disabled { opacity: 0.45; cursor: not-allowed; }
+      .btn-cancel {
+        border: 1px solid var(--line); background: var(--surface); color: var(--ink);
+        border-radius: 10px; padding: 13px 16px; font-weight: 600; cursor: pointer; min-height: 50px;
+      }
+      .why-disabled { font-size: 0.86rem; color: var(--warn); margin: 10px 0 0; font-weight: 600; }
+      .form-error { font-size: 0.9rem; color: var(--accent); margin: 10px 0 0; font-weight: 600; }
+      [hidden] { display: none !important; }
+
+      /* ---------- Lista de alertas ---------- */
+      section.alerts { margin-top: 26px; }
+      section.alerts h2 { font-size: 1.2rem; margin: 0 0 2px; }
+      section.alerts .sub { color: var(--ink-soft); font-size: 0.9rem; margin: 0 0 12px; }
+      .conn-status {
+        display: flex; align-items: center; gap: 8px;
+        font-size: 0.88rem; font-weight: 600; margin: 0 0 12px;
+        padding: 9px 12px; border-radius: 10px;
+        border: 1px solid var(--line); background: var(--surface); color: var(--ink-soft);
+      }
+      .conn-status .dot { flex: none; width: 10px; height: 10px; border-radius: 50%; background: var(--warn); }
+      .conn-status.ok { border-color: var(--ok); background: var(--ok-soft); color: var(--ink); }
+      .conn-status.ok .dot { background: var(--ok); }
+      .conn-status.error { border-color: var(--accent); background: var(--accent-soft); color: var(--ink); }
+      .conn-status.error .dot { background: var(--accent); }
+      .note code {
+        display: block; margin-top: 8px; white-space: pre-wrap; word-break: break-all;
+        background: var(--surface); border: 1px solid var(--line);
+        border-radius: 6px; padding: 8px 10px; font-size: 0.86em;
+      }
+      .empty {
+        border: 1.5px dashed var(--line); border-radius: var(--radius);
+        padding: 26px 18px; text-align: center; color: var(--ink-soft);
+        background: var(--surface);
+      }
+      .empty strong { color: var(--ink); display: block; font-size: 1.02rem; margin-bottom: 4px; }
+      .card {
+        background: var(--surface); border: 1px solid var(--line);
+        border-radius: var(--radius); box-shadow: var(--shadow);
+        padding: 14px 16px; margin-bottom: 12px;
+      }
+      .card-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+      .card h3 { margin: 0; font-size: 1.05rem; }
+      .badge {
+        flex: none; font-size: 0.76rem; font-weight: 800; letter-spacing: 0.02em;
+        padding: 4px 9px; border-radius: 999px; text-transform: uppercase;
+      }
+      .badge.unverified { background: var(--warn-soft); color: var(--warn); }
+      .badge.verified { background: var(--ok-soft); color: var(--ok); }
+      .card .meta { color: var(--ink-soft); font-size: 0.88rem; margin: 4px 0 0; }
+      .card .desc { margin: 8px 0 0; font-size: 0.95rem; }
+      .card .place { margin: 6px 0 0; font-size: 0.9rem; color: var(--ink-soft); }
+      .card-actions { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+      .btn-still {
+        flex: 1 1 40%; border: 0; border-radius: 10px; cursor: pointer;
+        background: var(--ok); color: #fff; padding: 11px; font-weight: 700; min-height: 46px;
+      }
+      .btn-gone {
+        flex: 1 1 40%; border: 1.5px solid var(--line); border-radius: 10px; cursor: pointer;
+        background: var(--surface); color: var(--ink); padding: 11px; font-weight: 700; min-height: 46px;
+      }
+      .btn-route {
+        flex: 1 1 100%; text-align: center; text-decoration: none;
+        border: 1.5px solid var(--line); border-radius: 10px;
+        background: var(--surface-2); color: var(--ink);
+        padding: 11px; font-weight: 700; min-height: 46px;
+        display: flex; align-items: center; justify-content: center; gap: 7px;
+      }
+      .card.voted .btn-still, .card.voted .btn-gone { opacity: 0.45; pointer-events: none; }
+      .card .voted-note { font-size: 0.85rem; color: var(--ok); font-weight: 700; margin: 10px 0 0; }
+
+      /* ---------- Publicar ---------- */
+      section.publish { margin-top: 30px; }
+      section.publish h2 { font-size: 1.2rem; margin: 0 0 6px; }
+      section.publish p { color: var(--ink-soft); font-size: 0.95rem; margin: 0 0 10px; }
+      section.publish p strong { color: var(--ink); }
+      .steps {
+        background: var(--surface); border: 1px solid var(--line);
+        border-radius: var(--radius); box-shadow: var(--shadow); padding: 6px 18px 12px;
+      }
+      .steps ol { padding-left: 20px; margin: 10px 0; }
+      .steps li { margin-bottom: 10px; font-size: 0.95rem; }
+      .steps li strong { display: block; }
+      .steps code {
+        background: var(--surface-2); border: 1px solid var(--line);
+        border-radius: 6px; padding: 1px 6px; font-size: 0.86em; word-break: break-all;
+      }
+      .note {
+        margin-top: 12px; padding: 12px 14px; border-radius: var(--radius);
+        background: var(--warn-soft); border: 1px solid var(--warn);
+        font-size: 0.92rem;
+      }
+      .note strong { display: block; margin-bottom: 2px; }
+
+      footer { margin-top: 30px; color: var(--ink-soft); font-size: 0.85rem; text-align: center; }
+      .leaflet-popup-content { font-family: inherit; font-size: 0.92rem; line-height: 1.45; }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <header class="top">
+        <h1>Alertas Comunitarias</h1>
+        <p>La comunidad avisa dónde se ven agentes de inmigración, operativos o retenes, como en Waze. Columbus, Georgia y alrededores.</p>
+        <span class="anon">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>
+          Reportes 100% anónimos: no se pide nombre ni cuenta.
+        </span>
+      </header>
+
+      <!-- Aviso de permiso de ubicación -->
+      <div class="perm" id="permBox" role="status">
+        <h2>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s-7-5.5-7-11a7 7 0 0 1 14 0c0 5.5-7 11-7 11z"/><circle cx="12" cy="10" r="2.6"/></svg>
+          <span id="permTitle">Activa tu ubicación para reportar</span>
+        </h2>
+        <p id="permText">Cuando toques «Usar mi ubicación actual», tu teléfono te va a preguntar si permites compartir tu ubicación. Toca <strong>Permitir</strong>: sin eso no se puede marcar el punto exacto de la alerta.</p>
+        <div id="permDeniedHelp" hidden>
+          <p>Tu navegador ya tiene la ubicación <strong>bloqueada</strong> para esta página, por eso ya no vuelve a preguntar. Actívala así:</p>
+          <p class="plat">En Android (Chrome)</p>
+          <ol>
+            <li>Toca el candado o el icono de ajustes en la barra de direcciones.</li>
+            <li>Toca «Permisos» y luego «Ubicación».</li>
+            <li>Elige «Permitir» y vuelve a esta página.</li>
+          </ol>
+          <p class="plat">En iPhone (Safari)</p>
+          <ol>
+            <li>Abre Ajustes → Safari → Ubicación y elige «Preguntar» o «Permitir».</li>
+            <li>O toca el botón «aA» en la barra de direcciones → «Ajustes del sitio web» → Ubicación → Permitir.</li>
+            <li>Vuelve a esta página y toca de nuevo el botón de ubicación.</li>
+          </ol>
+        </div>
+        <button class="btn-perm" id="permBtn" type="button">Usar mi ubicación actual</button>
+      </div>
+
+      <!-- Mapa -->
+      <div id="map" aria-label="Mapa de alertas de la comunidad"></div>
+      <div class="map-actions">
+        <button class="btn-ghost" id="centerMeBtn" type="button">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/><circle cx="12" cy="12" r="8"/></svg>
+          Centrar en mí
+        </button>
+        <button class="btn-ghost" id="centerCityBtn" type="button">Ver todo Columbus</button>
+      </div>
+
+      <button class="btn-report" id="openFormBtn" type="button">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 2.5 20h19L12 3z"/><path d="M12 10v4M12 17.2v.3"/></svg>
+        Reportar un avistamiento
+      </button>
+
+      <!-- Formulario de reporte -->
+      <form class="panel" id="reportForm" hidden novalidate>
+        <h2>Nueva alerta</h2>
+        <p class="hint">Marca qué viste y dónde. La alerta sale como «Sin verificar» y se borra sola a las 4 horas.</p>
+
+        <div class="field">
+          <span class="flabel" id="typeLabel">¿Qué viste?</span>
+          <div class="chips" role="group" aria-labelledby="typeLabel">
+            <button type="button" class="chip" data-type="Agentes de inmigración" aria-pressed="true">Agentes de inmigración</button>
+            <button type="button" class="chip" data-type="Operativo" aria-pressed="false">Operativo</button>
+            <button type="button" class="chip" data-type="Retén" aria-pressed="false">Retén</button>
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="placeInput">Lugar o referencia (calle, negocio cercano…)</label>
+          <textarea id="placeInput" placeholder="Ej.: estacionamiento de Walmart en Airport Thruway" maxlength="200"></textarea>
+        </div>
+
+        <div class="field">
+          <span class="flabel">Punto exacto en el mapa</span>
+          <div class="loc-box">
+            <p class="loc-status" id="locStatus">Todavía no hay ubicación. Toca el botón o toca un punto en el mapa.</p>
+            <button class="btn-loc" id="useMyLocBtn" type="button">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s-7-5.5-7-11a7 7 0 0 1 14 0c0 5.5-7 11-7 11z"/><circle cx="12" cy="10" r="2.6"/></svg>
+              Usar mi ubicación actual
+            </button>
+            <p class="loc-alt">¿No estás en el lugar? Toca directamente en el mapa el punto donde lo viste y se marca ahí.</p>
+          </div>
+        </div>
+
+        <p class="why-disabled" id="whyDisabled">Para publicar primero necesitas el punto en el mapa: usa tu ubicación actual o toca un punto en el mapa.</p>
+        <p class="form-error" id="formError" hidden></p>
+
+        <div class="form-actions">
+          <button class="btn-cancel" id="cancelFormBtn" type="button">Cancelar</button>
+          <button class="btn-publish" id="publishBtn" type="submit" disabled>Publicar alerta</button>
+        </div>
+      </form>
+
+      <!-- Alertas -->
+      <section class="alerts" aria-labelledby="alertsTitle">
+        <h2 id="alertsTitle">Alertas activas</h2>
+        <p class="sub">Cada alerta dura 4 horas. Si pasas por el lugar, confirma con «Sigue ahí» o avisa con «Ya no está».</p>
+        <p class="conn-status" id="connStatus" role="status"><span class="dot" aria-hidden="true"></span><span>Conectando con la base de datos compartida…</span></p>
+        <div id="alertsList">
+          <div class="empty" id="emptyState">
+            <strong>No hay alertas activas ahora</strong>
+            Cuando alguien de la comunidad reporte un avistamiento, aparecerá aquí y en el mapa.
+          </div>
+        </div>
+      </section>
+
+      <!-- Publicar -->
+      <section class="publish" aria-labelledby="publishTitle">
+        <h2 id="publishTitle">Cómo publicar esta página para que la use la gente</h2>
+        <p>Esta es la versión lista para publicar: una sola página web, sin tienda de aplicaciones. Se hospeda gratis en <strong>GitHub Pages</strong>, igual que hiciste con el juego, y cualquiera la abre desde el navegador de su teléfono.</p>
+        <div class="steps">
+          <ol>
+            <li><strong>Guarda esta página como index.html</strong>Es el único archivo que necesitas: el mapa, los botones y el formulario ya van dentro.</li>
+            <li><strong>Crea un repositorio en github.com</strong>Entra a tu cuenta, crea un repositorio nuevo (por ejemplo <code>alertas-comunitarias</code>) y sube el archivo <code>index.html</code> suelto, sin meterlo en carpetas.</li>
+            <li><strong>Activa Pages</strong>En el repositorio: Settings → Pages → rama <code>main</code>, carpeta raíz (<code>/root</code>) → Save.</li>
+            <li><strong>Comparte tu enlace</strong>Quedará como <code>tu-usuario.github.io/alertas-comunitarias</code>. Ese enlace es el que compartes por WhatsApp o Facebook para que la comunidad lo abra.</li>
+            <li><strong>El permiso de ubicación sale solo</strong>Como GitHub Pages usa conexión segura (https), la primera vez que cada persona toque «Usar mi ubicación actual», Chrome o Safari le preguntará «¿Permitir ubicación?» y con tocar <strong>Permitir</strong> ya puede reportar. No hay que instalar nada.</li>
+          </ol>
+        </div>
+        <div class="note">
+          <strong>Base de datos ya conectada: los reportes se comparten</strong>
+          Esta página ya está conectada a tu base de datos de Firebase, así que lo que una persona publique lo ven todas las demás, y las alertas se siguen borrando solas a las 4 horas.
+          <strong>Importante: las reglas de prueba vencen en unos 30 días</strong>
+          Si creaste la base de datos en «modo de prueba», Firebase cierra el acceso cuando pasen unos 30 días y las alertas dejarían de compartirse. Antes de que eso pase, entra a tu proyecto en la consola de Firebase → Realtime Database → pestaña «Reglas» y déjalas así, para que solo se pueda leer y escribir en las alertas:
+          <code>{ "rules": { "alerts": { ".read": true, ".write": true } } }</code>
+        </div>
+      </section>
+
+      <footer>Alertas Comunitarias · Columbus, Georgia · Los reportes son avisos de la comunidad: verifica siempre con cuidado y maneja con precaución.</footer>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+      (function () {
+        "use strict";
+
+        var COLUMBUS = [32.4609764, -84.9877094];
+        var FOUR_HOURS = 4 * 60 * 60 * 1000;
+
+        var DB_URL = "https://alertas-comunitarias-95a47-default-rtdb.firebaseio.com";
+        var reports = []; // {id, type, place, lat, lng, ts, confirms} — vienen de la base compartida
+        var votedIds = {}; // alertas ya votadas desde este teléfono en esta sesión (en memoria)
+        var myPos = null; // {lat, lng}
+        var selectedType = "Agentes de inmigración";
+        var draftPoint = null; // {lat, lng}
+        var draftMarker = null;
+        var myMarker = null;
+        var markers = {}; // id -> leaflet marker
+
+        var permBox = document.getElementById("permBox");
+        var permTitle = document.getElementById("permTitle");
+        var permText = document.getElementById("permText");
+        var permDeniedHelp = document.getElementById("permDeniedHelp");
+        var permBtn = document.getElementById("permBtn");
+        var form = document.getElementById("reportForm");
+        var openFormBtn = document.getElementById("openFormBtn");
+        var locStatus = document.getElementById("locStatus");
+        var publishBtn = document.getElementById("publishBtn");
+        var whyDisabled = document.getElementById("whyDisabled");
+        var formError = document.getElementById("formError");
+        var alertsList = document.getElementById("alertsList");
+        var connStatus = document.getElementById("connStatus");
+
+        /* ---------------- Mapa ---------------- */
+        var map = null;
+        if (window.L) {
+          map = L.map("map", { scrollWheelZoom: true }).setView(COLUMBUS, 12);
+          L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+            maxZoom: 19,
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+          }).addTo(map);
+          map.on("click", function (e) {
+            if (form.hidden) return;
+            setDraftPoint(e.latlng.lat, e.latlng.lng, "mapa");
+          });
+        } else {
+          document.getElementById("map").innerHTML =
+            '<p style="padding:16px;color:var(--ink-soft)">El mapa no cargó. Revisa tu conexión a internet y recarga la página.</p>';
+        }
+
+        function pinIcon(color) {
+          return L.divIcon({
+            className: "",
+            html: '<svg width="30" height="30" viewBox="0 0 24 24" fill="' + color + '" stroke="#fff" stroke-width="1.4" aria-hidden="true"><path d="M12 22s-7.5-6-7.5-11.5a7.5 7.5 0 0 1 15 0C19.5 16 12 22 12 22z"/><circle cx="12" cy="10.5" r="2.8" fill="#fff" stroke="none"/></svg>',
+            iconSize: [30, 30],
+            iconAnchor: [15, 28],
+            popupAnchor: [0, -26]
+          });
+        }
+
+        /* ---------------- Permiso de ubicación ---------------- */
+        function setPermState(state) {
+          permBox.classList.remove("state-ok", "state-denied");
+          if (state === "granted") {
+            permBox.classList.add("state-ok");
+            permTitle.textContent = "Ubicación activada";
+            permText.innerHTML = "Ya diste permiso. Al reportar, tu punto se marca solo con tocar «Usar mi ubicación actual».";
+            permDeniedHelp.hidden = true;
+            permBtn.hidden = true;
+          } else if (state === "denied") {
+            permBox.classList.add("state-denied");
+            permTitle.textContent = "La ubicación está bloqueada";
+            permText.innerHTML = "Tu navegador ya bloqueó el permiso para esta página, por eso no vuelve a preguntar. Sigue estos pasos y luego toca el botón:";
+            permDeniedHelp.hidden = false;
+            permBtn.hidden = false;
+          } else {
+            permTitle.textContent = "Activa tu ubicación para reportar";
+            permText.innerHTML = "Cuando toques «Usar mi ubicación actual», tu teléfono te va a preguntar si permites compartir tu ubicación. Toca <strong>Permitir</strong>: sin eso no se puede marcar el punto exacto de la alerta.";
+            permDeniedHelp.hidden = true;
+            permBtn.hidden = false;
+          }
+        }
+
+        function checkPermission() {
+          if (navigator.permissions && navigator.permissions.query) {
+            navigator.permissions.query({ name: "geolocation" }).then(function (st) {
+              setPermState(st.state);
+              st.onchange = function () { setPermState(st.state); };
+            }).catch(function () { setPermState("prompt"); });
+          } else {
+            setPermState("prompt");
+          }
+        }
+        checkPermission();
+
+        /* ---------------- Geolocalización con reintento ---------------- */
+        function getLocation(onOk, onErr) {
+          if (!("geolocation" in navigator)) {
+            onErr("Este navegador no tiene GPS ni ubicación.");
+            return;
+          }
+          navigator.geolocation.getCurrentPosition(
+            function (pos) { onOk(pos.coords.latitude, pos.coords.longitude); },
+            function (err1) {
+              // Reintento con ubicación aproximada si la precisa falla o tarda.
+              navigator.geolocation.getCurrentPosition(
+                function (pos) { onOk(pos.coords.latitude, pos.coords.longitude); },
+                function (err2) { onErr(describeGeoError(err2 || err1)); },
+                { enableHighAccuracy: false, timeout: 15000, maximumAge: 60000 }
+              );
+            },
+            { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+          );
+        }
+
+        function describeGeoError(err) {
+          if (!err) return "No se pudo obtener tu ubicación.";
+          if (err.code === 1) {
+            setPermState("denied");
+            return "El permiso de ubicación está bloqueado. Sigue los pasos del aviso de arriba para activarlo y vuelve a intentarlo.";
+          }
+          if (err.code === 2) return "El teléfono no pudo encontrar tu ubicación (sin señal GPS). Sal a un lugar abierto e inténtalo de nuevo, o toca el punto directamente en el mapa.";
+          if (err.code === 3) return "La ubicación tardó demasiado. Inténtalo de nuevo, o toca el punto directamente en el mapa.";
+          return "No se pudo obtener tu ubicación. Inténtalo de nuevo o toca el punto en el mapa.";
+        }
+
+        function showMyPos(lat, lng) {
+          myPos = { lat: lat, lng: lng };
+          if (map) {
+            if (myMarker) myMarker.remove();
+            myMarker = L.marker([lat, lng], { icon: pinIcon("#2563eb") })
+              .addTo(map)
+              .bindPopup("Estás aquí");
+          }
+        }
+
+        permBtn.addEventListener("click", function () {
+          permBtn.textContent = "Buscando tu ubicación…";
+          getLocation(
+            function (lat, lng) {
+              permBtn.textContent = "Usar mi ubicación actual";
+              showMyPos(lat, lng);
+              setPermState("granted");
+              if (map) map.setView([lat, lng], 14);
+            },
+            function (msg) {
+              permBtn.textContent = "Usar mi ubicación actual";
+              permText.innerHTML = msg;
+              if (navigator.permissions && navigator.permissions.query) checkPermission();
+            }
+          );
+        });
+
+        document.getElementById("centerMeBtn").addEventListener("click", function () {
+          if (myPos && map) { map.setView([myPos.lat, myPos.lng], 15); return; }
+          getLocation(
+            function (lat, lng) { showMyPos(lat, lng); setPermState("granted"); if (map) map.setView([lat, lng], 15); },
+            function (msg) { permText.innerHTML = msg; permBox.scrollIntoView({ behavior: "smooth", block: "center" }); }
+          );
+        });
+        document.getElementById("centerCityBtn").addEventListener("click", function () {
+          if (map) map.setView(COLUMBUS, 12);
+        });
+
+        /* ---------------- Formulario ---------------- */
+        openFormBtn.addEventListener("click", function () {
+          form.hidden = false;
+          openFormBtn.hidden = true;
+          form.scrollIntoView({ behavior: "smooth", block: "start" });
+          if (map) setTimeout(function () { map.invalidateSize(); }, 350);
+        });
+        document.getElementById("cancelFormBtn").addEventListener("click", closeForm);
+
+        function closeForm() {
+          form.hidden = true;
+          openFormBtn.hidden = false;
+          formError.hidden = true;
+          if (draftMarker && map) { draftMarker.remove(); draftMarker = null; }
+          draftPoint = null;
+          updatePublishState();
+        }
+
+        var chips = form.querySelectorAll(".chip");
+        chips.forEach(function (chip) {
+          chip.addEventListener("click", function () {
+            chips.forEach(function (c) { c.setAttribute("aria-pressed", "false"); });
+            chip.setAttribute("aria-pressed", "true");
+            selectedType = chip.getAttribute("data-type");
+          });
+        });
+
+        function setDraftPoint(lat, lng, source) {
+          draftPoint = { lat: lat, lng: lng };
+          if (map) {
+            if (draftMarker) draftMarker.remove();
+            draftMarker = L.marker([lat, lng], { icon: pinIcon("#b3271e"), draggable: true })
+              .addTo(map)
+              .bindPopup("Punto de la alerta. Puedes arrastrarlo para ajustarlo.")
+              .openPopup();
+            draftMarker.on("dragend", function () {
+              var p = draftMarker.getLatLng();
+              draftPoint = { lat: p.lat, lng: p.lng };
+            });
+          }
+          locStatus.innerHTML = source === "gps"
+            ? "<strong>Ubicación lista.</strong> Tu punto actual quedó marcado en el mapa. Puedes arrastrar el pin si necesitas ajustarlo."
+            : "<strong>Punto marcado en el mapa.</strong> Puedes arrastrar el pin para ajustarlo antes de publicar.";
+          updatePublishState();
+        }
+
+        document.getElementById("useMyLocBtn").addEventListener("click", function () {
+          var btn = this;
+          btn.textContent = "Buscando tu ubicación…";
+          getLocation(
+            function (lat, lng) {
+              btn.innerHTML = "Usar mi ubicación actual";
+              showMyPos(lat, lng);
+              setPermState("granted");
+              setDraftPoint(lat, lng, "gps");
+              if (map) map.setView([lat, lng], 15);
+            },
+            function (msg) {
+              btn.innerHTML = "Usar mi ubicación actual";
+              locStatus.textContent = msg;
+            }
+          );
+        });
+
+        function updatePublishState() {
+          var ready = !!draftPoint;
+          publishBtn.disabled = !ready;
+          whyDisabled.hidden = ready;
+        }
+
+        form.addEventListener("submit", function (ev) {
+          ev.preventDefault();
+          if (!draftPoint) {
+            formError.textContent = "Falta el punto en el mapa: usa tu ubicación actual o toca un punto en el mapa.";
+            formError.hidden = false;
+            return;
+          }
+          var payload = {
+            type: selectedType,
+            place: document.getElementById("placeInput").value.trim(),
+            lat: draftPoint.lat,
+            lng: draftPoint.lng,
+            ts: Date.now(),
+            confirms: 0
+          };
+          publishBtn.disabled = true;
+          publishBtn.textContent = "Publicando…";
+          formError.hidden = true;
+          fetch(DB_URL + "/alerts.json", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+          }).then(function (res) {
+            if (!res.ok) { var e = new Error("HTTP " + res.status); e.status = res.status; throw e; }
+            return res.json();
+          }).then(function () {
+            publishBtn.textContent = "Publicar alerta";
+            document.getElementById("placeInput").value = "";
+            closeForm();
+            fetchAlerts();
+            document.getElementById("alertsTitle").scrollIntoView({ behavior: "smooth", block: "start" });
+          }).catch(function (err) {
+            // No se fingió nada: la alerta NO se publicó. El formulario queda
+            // abierto con el punto marcado para poder reintentar.
+            publishBtn.textContent = "Publicar alerta";
+            publishBtn.disabled = false;
+            if (err && (err.status === 401 || err.status === 403)) {
+              formError.textContent = "La base de datos rechazó el permiso para publicar. Revisa las reglas de Firebase (deben permitir escribir en «alerts») e inténtalo de nuevo. Tu punto sigue marcado en el mapa.";
+            } else {
+              formError.textContent = "No se pudo publicar la alerta. Revisa tu conexión a internet e inténtalo de nuevo. Tu punto sigue marcado en el mapa.";
+            }
+            formError.hidden = false;
+          });
+        });
+
+        /* ---------------- Alertas (base de datos compartida) ---------------- */
+        function setConnStatus(state, text) {
+          connStatus.className = "conn-status" + (state ? " " + state : "");
+          connStatus.innerHTML = '<span class="dot" aria-hidden="true"></span><span>' + escapeHtml(text) + "</span>";
+        }
+
+        function fetchAlerts() {
+          return fetch(DB_URL + "/alerts.json")
+            .then(function (res) {
+              if (!res.ok) { var e = new Error("HTTP " + res.status); e.status = res.status; throw e; }
+              return res.json();
+            })
+            .then(function (data) {
+              var now = Date.now();
+              var list = [];
+              if (data) {
+                Object.keys(data).forEach(function (key) {
+                  var r = data[key];
+                  if (!r || typeof r.lat !== "number" || typeof r.lng !== "number" || typeof r.ts !== "number") return;
+                  if (now - r.ts >= FOUR_HOURS) {
+                    // Limpieza oportunista: borra de la base las ya vencidas.
+                    fetch(DB_URL + "/alerts/" + encodeURIComponent(key) + ".json", { method: "DELETE" }).catch(function () {});
+                    return;
+                  }
+                  list.push({
+                    id: key,
+                    type: typeof r.type === "string" ? r.type : "Alerta",
+                    place: typeof r.place === "string" ? r.place : "",
+                    lat: r.lat,
+                    lng: r.lng,
+                    ts: r.ts,
+                    confirms: typeof r.confirms === "number" ? r.confirms : 0
+                  });
+                });
+              }
+              list.sort(function (a, b) { return b.ts - a.ts; });
+              reports = list;
+              syncMarkers();
+              renderReports();
+              setConnStatus("ok", "Conectado: los reportes se comparten entre todos los teléfonos.");
+            })
+            .catch(function (err) {
+              if (err && (err.status === 401 || err.status === 403)) {
+                setConnStatus("error", "La base de datos rechazó el permiso. Revisa las reglas de Firebase: deben permitir leer y escribir en «alerts».");
+              } else {
+                setConnStatus("error", "Sin conexión con la base de datos. Revisa tu internet: las alertas compartidas no se están cargando.");
+              }
+            });
+        }
+
+        function syncMarkers() {
+          if (!map) return;
+          var seen = {};
+          reports.forEach(function (r) {
+            seen[r.id] = true;
+            if (!markers[r.id]) addMarker(r);
+          });
+          Object.keys(markers).forEach(function (id) {
+            if (!seen[id]) { markers[id].remove(); delete markers[id]; }
+          });
+        }
+
+        function addMarker(r) {
+          if (!map) return;
+          var m = L.marker([r.lat, r.lng], { icon: pinIcon("#b3271e") }).addTo(map);
+          m.bindPopup("<strong>" + escapeHtml(r.type) + "</strong><br>" + timeAgo(r.ts) +
+            (r.place ? "<br>" + escapeHtml(r.place) : ""));
+          markers[r.id] = m;
+        }
+
+        function timeAgo(ts) {
+          var mins = Math.max(0, Math.round((Date.now() - ts) / 60000));
+          if (mins < 1) return "ahora mismo";
+          if (mins < 60) return "hace " + mins + (mins === 1 ? " minuto" : " minutos");
+          var h = Math.floor(mins / 60), m = mins % 60;
+          return "hace " + h + (h === 1 ? " hora" : " horas") + (m ? " y " + m + " min" : "");
+        }
+
+        function timeLeft(ts) {
+          var ms = ts + FOUR_HOURS - Date.now();
+          if (ms <= 0) return "por vencer";
+          var mins = Math.round(ms / 60000);
+          if (mins < 60) return "se borra en " + mins + " min";
+          var h = Math.floor(mins / 60), m = mins % 60;
+          return "se borra en " + h + " h" + (m ? " " + m + " min" : "");
+        }
+
+        function distanceText(r) {
+          if (!myPos) return "";
+          var R = 6371, rad = Math.PI / 180;
+          var dLat = (r.lat - myPos.lat) * rad, dLng = (r.lng - myPos.lng) * rad;
+          var a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                  Math.cos(myPos.lat * rad) * Math.cos(r.lat * rad) *
+                  Math.sin(dLng / 2) * Math.sin(dLng / 2);
+          var km = 2 * R * Math.asin(Math.sqrt(a));
+          var mi = km * 0.621371;
+          return mi < 0.1 ? " · a menos de 0.1 millas de ti" : " · a " + mi.toFixed(1) + " millas de ti";
+        }
+
+        function escapeHtml(s) {
+          return String(s).replace(/[&<>"']/g, function (c) {
+            return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+          });
+        }
+
+        function pruneExpired() {
+          var now = Date.now(), changed = false;
+          reports = reports.filter(function (r) {
+            if (now - r.ts >= FOUR_HOURS) {
+              if (markers[r.id] && map) { markers[r.id].remove(); delete markers[r.id]; }
+              changed = true;
+              return false;
+            }
+            return true;
+          });
+          if (changed) renderReports();
+        }
+
+        function renderReports() {
+          pruneExpiredSilent();
+          if (!reports.length) {
+            alertsList.innerHTML =
+              '<div class="empty"><strong>No hay alertas activas ahora</strong>' +
+              "Cuando alguien de la comunidad reporte un avistamiento, aparecerá aquí y en el mapa.</div>";
+            return;
+          }
+          alertsList.innerHTML = "";
+          reports.forEach(function (r) {
+            var verified = r.confirms > 0;
+            var card = document.createElement("article");
+            card.className = "card" + (votedIds[r.id] ? " voted" : "");
+            var route = "https://www.google.com/maps/dir/?api=1&destination=" +
+              encodeURIComponent(r.lat + "," + r.lng);
+            card.innerHTML =
+              '<div class="card-top"><h3>' + escapeHtml(r.type) + "</h3>" +
+              '<span class="badge ' + (verified ? "verified" : "unverified") + '">' +
+              (verified ? "Confirmado" : "Sin verificar") + "</span></div>" +
+              '<p class="meta">Reportado ' + timeAgo(r.ts) + distanceText(r) + " · " + timeLeft(r.ts) + "</p>" +
+              (r.place ? '<p class="desc">' + escapeHtml(r.place) + "</p>" : "") +
+              (verified ? '<p class="place">' + r.confirms + (r.confirms === 1 ? " persona confirmó" : " personas confirmaron") + " que sigue ahí.</p>" : "") +
+              '<div class="card-actions">' +
+              '<button type="button" class="btn-still" data-act="still" data-id="' + r.id + '">Sigue ahí</button>' +
+              '<button type="button" class="btn-gone" data-act="gone" data-id="' + r.id + '">Ya no está</button>' +
+              '<a class="btn-route" href="' + route + '" target="_blank" rel="noopener">Cómo llegar</a>' +
+              "</div>" +
+              (votedIds[r.id] ? '<p class="voted-note">Gracias por confirmar. Tu aviso ayuda a la comunidad.</p>' : "");
+            alertsList.appendChild(card);
+          });
+        }
+
+        function pruneExpiredSilent() {
+          var now = Date.now();
+          reports = reports.filter(function (r) { return now - r.ts < FOUR_HOURS; });
+        }
+
+        alertsList.addEventListener("click", function (ev) {
+          var btn = ev.target.closest("button[data-act]");
+          if (!btn) return;
+          var id = btn.getAttribute("data-id");
+          var r = null;
+          reports.forEach(function (x) { if (x.id === id) r = x; });
+          if (!r || votedIds[id]) return;
+          btn.disabled = true;
+          if (btn.getAttribute("data-act") === "still") {
+            // Confirmar renueva las 4 horas y suma una confirmación, en la base compartida.
+            fetch(DB_URL + "/alerts/" + encodeURIComponent(id) + ".json", {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ confirms: r.confirms + 1, ts: Date.now() })
+            }).then(function (res) {
+              if (!res.ok) { var e = new Error("HTTP " + res.status); e.status = res.status; throw e; }
+              votedIds[id] = true;
+              fetchAlerts();
+            }).catch(function () {
+              btn.disabled = false;
+              setConnStatus("error", "No se pudo enviar tu confirmación. Revisa tu conexión e inténtalo de nuevo.");
+            });
+          } else {
+            // "Ya no está": la alerta se borra de la base para todos.
+            fetch(DB_URL + "/alerts/" + encodeURIComponent(id) + ".json", { method: "DELETE" })
+              .then(function (res) {
+                if (!res.ok) { var e = new Error("HTTP " + res.status); e.status = res.status; throw e; }
+                votedIds[id] = true;
+                reports = reports.filter(function (x) { return x.id !== id; });
+                if (markers[id] && map) { markers[id].remove(); delete markers[id]; }
+                renderReports();
+                fetchAlerts();
+              }).catch(function () {
+                btn.disabled = false;
+                setConnStatus("error", "No se pudo retirar la alerta. Revisa tu conexión e inténtalo de nuevo.");
+              });
+          }
+        });
+
+        // Trae las alertas compartidas al abrir y las refresca cada 30 segundos.
+        setConnStatus("", "Conectando con la base de datos compartida…");
+        fetchAlerts();
+        setInterval(fetchAlerts, 30000);
+        // Refresca los textos de tiempo y borra vencidas cada minuto.
+        setInterval(function () { pruneExpired(); renderReports(); }, 60000);
+        renderReports();
+      })();
+    </script>
+  </body>
+</html>
